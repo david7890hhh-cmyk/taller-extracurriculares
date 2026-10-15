@@ -1,0 +1,143 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Talleres Extracurriculares</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { margin: 0; padding: 20px; background-color: #f5f7fa; color: #333; }
+    header { text-align: center; margin-bottom: 30px; }
+    h1 { color: #2c3e50; margin-bottom: 5px; }
+    p.subtitle { color: #7f8c8d; }
+    .container { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 20px; }
+    .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    .talleres-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
+    .taller-card { border: 1px solid #e1e8ed; border-radius: 6px; padding: 15px; background: #fff; }
+    .taller-card h3 { margin-top: 0; color: #2980b9; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold; background: #e8f8f5; color: #27ae60; }
+    .badge.lleno { background: #fadbd8; color: #c0392b; }
+    form { display: grid; gap: 10px; margin-top: 15px; }
+    input, select, button { padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-size: 1em; width: 100%; }
+    button { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+    button:hover { background-color: #2980b9; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Sistema de Talleres Extracurriculares</h1>
+    <p class="subtitle">Consulta talleres disponibles e inscríbete fácilmente</p>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <h2>Talleres Disponibles</h2>
+      <div id="lista-talleres" class="talleres-grid">
+        <p>Cargando talleres...</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Inscribirse a un Taller</h2>
+      <form id="form-inscripcion">
+        <div>
+          <label>Selecciona un taller:</label>
+          <select id="select-taller" required>
+            <option value="">Cargando...</option>
+          </select>
+        </div>
+        <div>
+          <label>Nombre del estudiante:</label>
+          <input type="text" id="nombre" placeholder="Ej. Juan Pérez" required>
+        </div>
+        <div>
+          <label>Correo electrónico:</label>
+          <input type="email" id="correo" placeholder="Ej. juan@correo.com" required>
+        </div>
+        <button type="submit">Completar Inscripción</button>
+      </form>
+      <div id="mensaje-resultado" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+
+  <script>
+    async function cargarTalleres() {
+      try {
+        const res = await fetch('/api/talleres');
+        const talleres = await res.json();
+
+        const lista = document.getElementById('lista-talleres');
+        const select = document.getElementById('select-taller');
+
+        if (talleres.length === 0) {
+          lista.innerHTML = '<p>No hay talleres disponibles.</p>';
+          select.innerHTML = '<option value="">Sin talleres</option>';
+          return;
+        }
+
+        lista.innerHTML = talleres.map(t => `
+          <div class="taller-card">
+            <h3>${t.nombre}</h3>
+            <p>${t.descripcion || 'Sin descripción'}</p>
+            <p><strong>Horario:</strong> ${t.horario || 'Por definir'}</p>
+            <p><strong>Salón:</strong> ${t.salon || 'Por definir'}</p>
+            <p><span class="badge ${t.cuposDisponibles <= 0 ? 'lleno' : ''}">
+              Cupos: ${t.cuposDisponibles} / ${t.cupoMaximo}
+            </span></p>
+          </div>
+        `).join('');
+
+        select.innerHTML = talleres
+          .filter(t => t.cuposDisponibles > 0)
+          .map(t => `<option value="${t.id}">${t.nombre} (${t.cuposDisponibles} cupos)</option>`)
+          .join('');
+
+        if (select.innerHTML === '') {
+          select.innerHTML = '<option value="">No hay cupos en ningún taller</option>';
+        }
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('lista-talleres').innerHTML = '<p>Error al cargar talleres.</p>';
+      }
+    }
+
+    document.getElementById('form-inscripcion').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const tallerId = document.getElementById('select-taller').value;
+      const estudianteNombre = document.getElementById('nombre').value;
+      const estudianteCorreo = document.getElementById('correo').value;
+      const mensajeDiv = document.getElementById('mensaje-resultado');
+
+      if (!tallerId) {
+        mensajeDiv.innerHTML = '<p style="color: red;">Selecciona un taller válido.</p>';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/inscripciones', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tallerId, estudianteNombre, estudianteCorreo })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          mensajeDiv.innerHTML = '<p style="color: green; font-weight: bold;">¡Inscripción realizada con éxito!</p>';
+          document.getElementById('form-inscripcion').reset();
+          cargarTalleres();
+        } else {
+          mensajeDiv.innerHTML = `<p style="color: red;">${data.error || 'Error al inscribir'}</p>`;
+        }
+      } catch (err) {
+        mensajeDiv.innerHTML = '<p style="color: red;">Error de conexión con el servidor.</p>';
+      }
+    });
+
+    cargarTalleres();
+  </script>
+</body>
+</html>
